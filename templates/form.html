@@ -55,10 +55,12 @@
 		
 		for (let key in items) {
 			const quantity_dom = $(`input[name='${key}']`);
-			if(warehouse == "US" || !warehouse) {
-				quantity_dom.max = available_us[key] + available[key];
+			if(warehouse == "US") {
+				quantity_dom.max = available_us[key];
 			} else if(warehouse == "ANTE") {
 				quantity_dom.max = available[key];
+			} else {
+				quantity_dom.max = Math.max(available_us[key], available[key]);
 			}
 			if(parseInt(quantity_dom.max) > 0 && parseInt(quantity_dom.value) == 0) {
 				quantity_dom.value = 1;
@@ -111,6 +113,9 @@ nanpa mani pi esun Sate li lon ma ni (kepeken toki Inli): <a href="https://githu
 
 <h3>sina lon ma seme?</h3>
 <span class="error-message">{{ error_message.get("address", "") }}</span>
+nimi "*" li lon la o pana e ona! nimi "*" li lon ala la sina ken pana ala e ona.<br/>
+o kepeken toki Inli lon ma ni!<br/>
+sina wile la sina ken pana e nanpa pi ilo toki sina e nimi Email sina. ijo li pakala la jan pi tawa poki li ken toki tawa sina.<br/>
 <p>
 	<style>
 		#warehouse_us_content {
@@ -148,21 +153,18 @@ nanpa mani pi esun Sate li lon ma ni (kepeken toki Inli): <a href="https://githu
 		<input type="hidden" name="country" value="USA" {{ "disabled" if not request.form.get("warehouse") == "US" else "" }}>
 
 		<span id="warehouse_ante_content" class="description">
-			mi wile kepeken kulupu <a href="https://www.hongkongpost.hk" target="_blank">HongKongPost</a>. ni li mani lili li tenpo lili. <br/>
-			poki ijo li open tawa tomo sina la sina o awen e tenpo mun wan. <br/><br/>
+			mi wile kepeken nasin "Registered Air Packet" pi kulupu <a href="https://www.hongkongpost.hk" target="_blank">HongKongPost</a>. <br/>
+			poki li open tawa tomo sina la sina o awen e tenpo mun wan. <br/><br/>
 		</span>
 		<span id="warehouse_us_content" class="description">
 			tenpo nanpa wan la mi pana e ijo tawa jan pona Mewika mi kepeken kulupu <a href="https://lhkexpress.com/" target="_blank">LHK Express</a>.<br/>
 			tenpo nanpa tu la jan pona Mewika mi li pana e ijo tawa sina kepeken kulupu USPS.<br/>
-			poki ijo li open tawa jan pona Mewika mi la sina o awen e tenpo mun tu. <br/><br/>
+			poki li open tawa jan pona Mewika mi la sina o awen e tenpo mun tu. <br/><br/>
 		</span>
 	</span>
-
-	o kepeken toki Inli lon sewi a!<br/>
-	sina wile la sina ken pana e nanpa sina e nimi Email sina. ijo li pakala la jan pi tawa poki li ken toki tawa sina.<br/>
 </p>
 
-<h3>ijo li pakala la mi ken toki tawa sina kepeken nasin seme?</h3>
+<h3>ijo li pakala la mi (jan Sate) ken toki tawa sina kepeken nasin seme?</h3>
 <span class="error-message">{{ error_message.get("contact", "") }}</span>
 	<textarea name="contact" autocomplete="off" placeholder="ilo Email: foobar@example.com
 ilo Telekan: @foobar
@@ -186,9 +188,9 @@ Lipela IRC, Email)" rows="8" cols="32" required>{{ request.form.get("contact", "
 
 		<input type="checkbox" id="{{ key }}" hidden onchange="quantity_update_handler();" {{ "checked" if request.form.get(key, "0") != "0" else "" }}>
 		<label for="{{ key }}">mi wile e ni:</label>
-		<input type="number" name="{{ key }}" value="0" min="0" max="{{ available.get(key, 0)+available_us.get(key, 0) }}" required value="{{ request.form.get(key, 1) }}" onchange="quantity_update_handler();"/><br/>
-		(jo: {{ available_us.get(key, 0) }} tawa ma Mewika taso)<br/>
-		(jo: {{ available.get(key, 0) }} tawa ma ali tawa ma Mewika)
+		<input type="number" name="{{ key }}" min="0" max="{{ [available.get(key, 0),available_us.get(key, 0)]|max }}" required value="{{ request.form.get(key, 1) }}" onchange="quantity_update_handler();"/><br/>
+		(jo: {{ available_us.get(key, 0) }} tawa ma Mewika)<br/>
+		(jo: {{ available.get(key, 0) }} tawa ma ante)
 		</div>
 	{% endfor %}
 </div>
