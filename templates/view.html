@@ -1,0 +1,134 @@
+{% extends "layout.html" %}
+{% block title %}nanpa esun {{ session_id }}{% endblock %}
+{% block content %}
+
+<style>
+	.content-field {
+		border: 1px solid;
+		font-weight: bold;
+	}
+</style>
+
+<h2>nanpa esun {{ session_id }}</h2>
+
+<h3>ni li sona pi esun ni. o lukin:</h3>
+
+<table border="1">
+<tr><th align="right">nimi sina:</th><td>{{ entry["address_recipient"] }}</td></tr>
+<tr><th align="right">nanpa pi ilo toki:</th><td>{{ entry["address_phone"] }}</td></tr>
+<tr><th align="right">nimi pi ilo Email:</th><td>{{ entry["address_email"] }}</td></tr>
+<tr><th align="right">linja ma wan:</th><td>{{ entry["address_line1"] }}</td></tr>
+<tr><th align="right">linja ma tu:</th><td>{{ entry["address_line2"] }}</td></tr>
+<tr><th align="right">linja ma tu wan:</th><td>{{ entry["address_line3"] }}</td></tr>
+<tr><th align="right">linja ma tu tu:</th><td>{{ entry["address_line4"] }}</td></tr>
+<tr><th align="right">ma tomo:</th><td>{{ entry["address_city"] }}</td></tr>
+<tr><th align="right">nanpa ZIP:</th><td>{{ entry["address_zip"] }}</td></tr>
+<tr><th align="right">ma:</th><td>{{ entry["address_country"] }}</td></tr>
+<tr><th align="right">ma Mewika anu ma ante?</th><td>{{ entry["warehouse"] }}</td></tr>
+<tr><th valign="top" align="right">nasin toki tawa sina:</th><td><textarea rows="8" cols="32" readonly>{{ entry["contact"] }}</textarea></td></tr>
+<tr><th valign="top" align="right">sina esun e ni:</th><td>
+	<table>
+	<tr><th>ijo</th><th>mute</th><th>mani</th></tr>
+	{% for item in items %}
+	<tr><th align="right">{{item["name"]}}:</th><td>x{{item["quantity"]}}</td><td>=US${{'%0.2f' % (item["quantity"]*item["price_each"])}}</td></tr>
+	{% endfor %}
+	<tr><th colspan="2" align="right">mani ali:</th><th align="left">US${{'%0.2f' % total_price}}</th></tr>
+	</table>
+</td></tr>
+<tr><th align="right">seme li sin?</th><td>
+	<table>
+	{% for s in status %}
+		<tr><th valign="top" align="right">{{s["datetime_str"]}}:</th><td valign="top">{{s["description"]}}</td></tr>
+	{% endfor %}
+	</table>
+	{% if entry["message"] is not none %}
+		<b>sona namako:</b> {{ entry["message"] }} <br/>
+	{% endif %}
+</td></tr>
+</table>
+
+{% if status[-1]|length == 0 %}
+	<h3>PAKALA A! O TOKI TAWA JAN SATE!</h3>
+
+{% elif status[-1]["status"] == -1 %}
+	<h3>esun ni li moli!</h3>
+
+	sina wile esun sin la o kepeken nena ni. ni la sina ken ante e esun ni: <br/>
+		<ul><li>
+			<form action="/" method="POST">
+				<input type="hidden" name="recipient" value="{{entry['address_recipient']}}" />
+				<input type="hidden" name="phone" value="{{entry['address_phone']}}" />
+				<input type="hidden" name="email" value="{{entry['address_email']}}" />
+				<input type="hidden" name="line1" value="{{entry['address_line1']}}" />
+				<input type="hidden" name="line2" value="{{entry['address_line2']}}" />
+				<input type="hidden" name="line3" value="{{entry['address_line3']}}" />
+				<input type="hidden" name="line4" value="{{entry['address_line4']}}" />
+				<input type="hidden" name="city" value="{{entry['address_city']}}" />
+				<input type="hidden" name="zip" value="{{entry['address_zip']}}" />
+				<input type="hidden" name="warehouse" value="{{entry['warehouse']}}" />
+				<input type="hidden" name="country" value="{{entry['address_country']}}" />
+				<input type="hidden" name="contact" value="{{entry['contact']}}" />
+				{% for item in items %}
+				<input type="hidden" name="{{item['item']}}" value="{{item['quantity']}}" />
+				{% endfor %}
+				<input type="hidden" name="skip-validation" value="1" />
+				<input type="submit" value="o esun sin!" />
+			</form>
+		</li></ul>
+	tenpo {{ expiry }} la lipu ni li wile kama weka. <br/>
+	<b><i>"ike a! mi pini pana e mani! taso esun ni li kama moli! mi o pali e seme?"</i></b> <br/>
+	- ali li pona. o toki tawa jan Sate.
+
+{% elif status[-1]["status"] == 0 %}
+	<h2>tenpo ni la sina ken pali e seme?</h2>
+	<h3>ken wan: sona pi esun ni li pona! mi wile pana e mani:</h3>
+	<ol>
+	<li>o pana e mani kepeken tenpo lili "1hr". sina pana ala e mani la esun ni li kama moli.</li>
+	<li>o pana e nimi "Add a note" <span class="content-field">{{session_id[:8]}}</span> e mani <span class="content-field">US${{'%0.2f' % total_price}}</span> lon ma Paypal ni: <a href="{{paypal_link}}/{{'%0.0f' % total_price}}USD" target="_blank">o pana e mani kepeken ilo Paypal!</a></li>
+	<li>sina pini pana e mani la o pilin e nena ni:
+		<ul><li>
+			<form action="/ante-e-esun" method="POST" onsubmit="return confirm('sina pini ala pini pana e mani?');">
+				<input type="hidden" name="session_id" value="{{session_id}}" />
+				<input type="hidden" name="status" value="1" />
+				<input type="submit" value="mi pini pana e mani!" />
+			</form>
+		</li></ul>
+	</li>
+	<li>o awen e linja ni. sina ken lukin e ijo pi poki sina kepeken ona: <a href="{{ request.path }}">{{ request.base_url }}</a></li>
+	</ol>
+
+	<h3>ken tu: ike a! ijo li pakala! mi wile ala esun!</h3>
+	sina wile ala esun la o pilin e nena ni: <br/>
+		<ul><li>
+			<form action="/ante-e-esun" method="POST" onsubmit="return confirm('sina wile ala wile moli e esun ni?');">
+				<input type="hidden" name="session_id" value="{{session_id}}" />
+				<input type="hidden" name="status" value="-1" />
+				<input type="submit" value="o moli e esun ni!" />
+			</form>
+		</li></ul>
+	kepeken nena ni la sina kin li ken ante e esun ni.
+
+{% elif status[-1]["status"] == 1 %}
+	<h3>sina toki e ni: sina pini pana e mani!</h3>
+	o awen a! mi lukin e mani sina la mi wile pana e poki pi ijo sina tawa tomo sina. <br/>
+	o awen e linja ni. sina ken lukin e ijo pi poki sina kepeken ona: <a href="{{ request.path }}">{{ request.base_url }}</a><br/>
+
+{% elif status[-1]["status"] in [2,3,4,5] %}
+	<h3>jan Sate li jo e mani sina!</h3>
+	o awen a! poki pi ijo sina li open tawa tomo sina la mi wile toki tawa sina. <br/>
+	o awen e linja ni. sina ken lukin e ijo pi poki sina kepeken ona: <a href="{{ request.path }}">{{ request.base_url }}</a><br/>
+
+{% elif status[-1]["status"] == 6 %}
+	<h3>esun ni li pini!</h3>
+	tenpo {{ expiry }} la lipu ni li wile kama weka. <br/>
+
+{% else %}
+	<h3>PAKALA A! O TOKI TAWA JAN SATE!</h3>
+
+{% endif %}
+
+<h3>pakala li lon a! mi o seme?</h3>
+ijo li pakala la o toki tawa jan Sate kepeken nasin ni: <br/>
+{% include "contact.html" %}
+
+{% endblock %}

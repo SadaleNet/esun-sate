@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block title %}lawa{% endblock %}
+{% block content %}
+
+<script>
+	function $(x) {
+		return document.querySelector(x);
+	}
+</script>
+
+<h3>seme li lon? (jo / ali => sina pilin e nena la nanpa jo li kama ni)</h3>
+<form action="/ante-nanpa-ijo" method="POST">
+	<table border="1">
+	<tr>
+		<th>&nbsp;</th>
+		<th>ma Mewika</th>
+		<th>ma ante</th>
+	</tr>
+	{% for key in listing %}
+	<tr>
+		<td>{{ key }}</td>
+		<td>{{ stock['available_us'][key] }}/<input type="number" class="inventory-adjuster" name="{{ key }}_US" value="{{ stock['total_us'][key] }}" min="0" max="1000000" required onchange="$('#'+this.name).innerHTML = this.value - ({{ stock['total_us'][key] - stock['available_us'][key] }});"/> => <span id="{{ key }}_US"></span></td>
+		<td>{{ stock['available_ante'][key] }}/<input type="number" class="inventory-adjuster" name="{{ key }}_ANTE" value="{{ stock['total_ante'][key] }}" min="0" max="1000000" required onchange="$('#'+this.name).innerHTML = this.value - ({{ stock['total_ante'][key] - stock['available_ante'][key] }});"/> => <span id="{{ key }}_ANTE"></span></td>
+	</tr>
+	{% endfor %}
+	</table>
+<input type="submit" value="o ante!" />
+</form>
+
+<script>
+for(const em of document.querySelectorAll("input[class='inventory-adjuster']")) {
+	em.onchange();
+}
+</script>
+
+<h3>Orders</h3>
+
+{% for order in orders %}
+<a href="/lukin/{{order['session_id']}}" target="_blank">{{ order["session_id"] }}</a><br/>
+{% endfor %}
+
+
+{% endblock %}

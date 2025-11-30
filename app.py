@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import json
 import random
@@ -5,17 +6,34 @@ import sqlite3
 import os
 import time
 import uuid
-from flask import Flask, url_for, render_template, send_from_directory, send_file, abort, request, redirect
+from flask import Flask, url_for, render_template, send_from_directory, send_file, abort, request, redirect, g
 
 app = Flask(__name__)
 app.config.from_file("./config.json", load=json.load)
 app.config.from_file("./.config_secret.json", load=json.load)
 
+STATUS_MAP = {-1: "moli", 0: "sin", 1: "pana-mani", 2: "lukin-mani", 3: "open-tawa-US", 4: "lon-ma-US", 5: "open-tawa-tomo", 6: "pini"}
+STATUS_DESCRIPTION_MAP = {
+	-1: "esun ni li kama moli.",
+	0: "esun ni li kama lon.",
+	1: "sina toki e ni: sina pini pana e mani. mi wile lukin lon tenpo kama.",
+	2: "mi lukin e ni: sina pana e mani.",
+	3: "mi open pana e poki tawa tomo pi jan pona Mewika mi.",
+	4: "poki li lon tomo pi jan pona Mewika mi.",
+	5: "poki li open tawa tomo sina.",
+	6: "sina jo e poki. esun ni li pini."}
+
+
 CAPTCHA = ['kala', 'kasi', 'kili', 'kiwen', 'len', 'lipu', 'luka', 'mani', 'mun', 'noka', 'pan', 'pipi', 'poki', 'soweli', 'tomo', 'waso']
 
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(app.config["DATABASE"], autocommit=True)
+    return db
 
 def connect_database():
-	con = sqlite3.connect(app.config["DATABASE"], autocommit=True)
+	con = get_db()
 	cur = con.cursor()
 	cur.execute("""
 CREATE TABLE IF NOT EXISTS orders (
@@ -63,7 +81,6 @@ CREATE TABLE IF NOT EXISTS inventory_list (
 	);
 """)
 	# TODO: Make old orders stale here!
-	cur.close()
 	return con
 
 def get_available_stock():
@@ -91,11 +108,31 @@ SELECT orders.warehouse, item, COUNT(*) FROM inventory_checkout, orders
 			if i[1] == "pokitawa":
 				continue # No availability counter for pokitawa
 			available[i[0]][i[1]] -= i[2]
-	cur.close()
-	con.close()
 
 	return {"total_ante": total["ANTE"], "total_us": total["US"],
 			"available_ante": available["ANTE"], "available_us": available["US"]}
+
+def get_order_rowid_by_session_id(cur, session_id):
+	cur.execute(f"SELECT rowid FROM orders WHERE session_id = ?", (session_id,))
+	if cur.rowcount == 0:
+		return None
+	return cur.fetchone()[0]
+
+def get_utc_timestr_from_timestamp(timestamp):
+	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d %H:%M:%S UTC')
+
+def get_status_by_order_rowid(cur, rowid):
+	if rowid is None:
+		return None
+	status = []
+	cur.execute(f"SELECT datetime, status FROM status_change WHERE order_id = ? ORDER BY datetime", (rowid,))
+	for status_change in cur.fetchall():
+		entry = {"datetime": status_change[0], "status": status_change[1]}
+		entry["datetime_str"] = get_utc_timestr_from_timestamp(entry["datetime"])
+		entry["status_str"] = STATUS_MAP[entry["status"]] if entry["status"] in STATUS_MAP else ""
+		entry["description"] = STATUS_DESCRIPTION_MAP[entry["status"]] if entry["status"] in STATUS_DESCRIPTION_MAP else ""
+		status.append(entry)
+	return status
 
 def compute_challenge_hash(session_id, image_id):
 	m = hashlib.sha256()
@@ -116,7 +153,7 @@ def form():
 
 	error_message = {}
 
-	if request.method == 'POST':
+	if request.method == 'POST' and not request.form.get('skip-validation'):
 		if not (request.form.get('recipient') and request.form.get('line1') and request.form.get('city') and request.form.get('country') and request.form.get('warehouse')):
 			error_message["address"] = "nimi \"*\" li lon la pana e ona!"
 
@@ -192,8 +229,6 @@ def form():
 					abort(500)
 
 				cur.execute("COMMIT TRANSACTION;")
-				cur.close()
-				con.close()
 
 			# all good! Redirect to /lukin/<token>!
 			session_id = request.form.get("session_id", "")
@@ -218,16 +253,55 @@ def captcha(session_id, challenge):
 										f"{i}.jpg", mimetype="image/jpeg", download_name="sitelen.jpg")
 	abort(404)
 
-@app.route('/lukin/<token>')
-def view(token):
-	return "<p>Hello, World!</p>"
+@app.route('/lukin/<session_id>')
+def view(session_id):
+	con = connect_database()
+	cur = con.cursor()
+
+	entry = {}
+
+	fields = ["rowid", "status", "warehouse", "contact", "message",
+				"address_recipient", "address_phone", "address_email",
+				"address_line1", "address_line2", "address_line3", "address_line4",
+				"address_city", "address_zip", "address_country"]
+	cur.execute(f"SELECT {','.join(fields)} FROM orders WHERE session_id = ?", (session_id,))
+	if cur.rowcount == 0:
+		abort(404)
+	for i, v in enumerate(cur.fetchone()):
+		entry[fields[i]] = v
+
+	status = get_status_by_order_rowid(cur, entry["rowid"])
+
+	items = []
+	cur.execute(f"SELECT item, quantity, price_each FROM inventory_checkout WHERE order_id = ?", (entry["rowid"],))
+	shipping_item = None
+	for item in cur.fetchall():
+		item_dict = {"item": item[0], "quantity": item[1], "price_each": item[2]}
+		if item_dict["item"] == "pokitawa":
+			shipping_item = item_dict
+			shipping_item["name"] = "poki tawa"
+			continue
+		item_dict["name"] = app.config["LISTING"][item_dict["item"]]["title"]
+		items.append(item_dict)
+	# Always put the shipping entry the last on the list
+	if shipping_item is not None:
+		items.append(shipping_item)
+
+	total_price = sum([i["quantity"]*i["price_each"] for i in items])
+	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry="TODO")
 
 @app.route('/lawa')
 def admin():
 	if not check_auth():
 		abort(404)
-	print(get_available_stock())
-	return render_template('admin.html', listing=app.config["LISTING"], stock=get_available_stock())
+
+	orders = []
+	con = connect_database()
+	cur = con.cursor()
+	cur.execute("SELECT session_id FROM orders")
+	for i in cur.fetchall():
+		orders.append({"session_id": i[0]})
+	return render_template('admin.html', listing=app.config["LISTING"], stock=get_available_stock(), orders=orders)
 
 
 @app.route('/ante-nanpa-ijo', methods=['POST'])
@@ -241,10 +315,45 @@ def update_inventory():
 		cur.execute("UPDATE inventory_list SET quantity_us = ?, quantity_ante = ? WHERE item = ?", update_content)
 		if cur.rowcount == 0:
 			cur.execute("INSERT INTO inventory_list (quantity_us, quantity_ante, item) VALUES (?,?,?)", update_content)
-	cur.close()
-	con.close()
 	return redirect("/lawa", code=302)
 
+@app.route('/ante-e-esun', methods=['POST'])
+def update_status():
+	if not request.form.get("session_id") or not request.form.get("status"):
+		abort(500)
+
+	con = connect_database()
+	cur = con.cursor()
+
+	session_id = request.form.get("session_id", "")
+	new_status = request.form.get("status", "")
+
+	rowid = get_order_rowid_by_session_id(cur, session_id)
+	status = get_status_by_order_rowid(cur, rowid)
+
+	error = False
+
+	# Only allows changing status if the status's "NEW"
+	if status == None or status[-1]["status"] != 0:
+		error = True
+
+	# Only allows changing status to either -1 (moli) or 1 (pana-mani)
+	if new_status not in ["-1", "1"]:
+		error = True
+
+	if not error:
+		timenow = round(time.time())
+		cur.execute("INSERT INTO status_change (order_id, datetime, status) VALUES (?,?,?)", (rowid, timenow, int(new_status)))
+
+	# Regardless if there's an error, redirect the user back to the view order page
+	return redirect(f"/lukin/{session_id}", code=302)
+
+@app.route('/lawa/ante-e-esun', methods=['POST'])
+def update_order():
+	if not check_auth():
+		abort(404)
+	session_id = request.form.get("session_id", "")
+	
 
 @app.route('/favicon.ico')
 def favicon():
@@ -254,3 +363,9 @@ def favicon():
 @app.route('/robots.txt')
 def robots():
 	return send_from_directory(app.root_path, "robots.txt", mimetype="text/plain")
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
