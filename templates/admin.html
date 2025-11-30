@@ -35,8 +35,34 @@ for(const em of document.querySelectorAll("input[class='inventory-adjuster']")) 
 
 <h3>Orders</h3>
 
-{% for order in orders %}
-<a href="/lukin/{{order['session_id']}}" target="_blank">{{ order["session_id"] }}</a><br/>
+{% for status in [1, 2, 3, 4, 5, 0, 6, -1] %}
+	<h3>{{status_title[status]}}</h3>
+	<ul>
+	{% for order in orders %}
+		{% if order['status'] == status %}
+			<form action="/lawa/ante-e-esun" method="POST">
+			<li>
+				<a href="/lukin/{{order['session_id']}}" target="_blank">{{ order["session_id"] }}</a>
+				<textarea rows="1" readonly>{{ order['ip'] }}</textarea>
+				<textarea name="ref" rows="1" placeholder="REF">{{ order['ref'] if order['ref'] }}</textarea>
+				<textarea name="message" rows="1" placeholder="toki">{{ order['message'] if order['message'] }}</textarea>
+				<select name="status" required>
+					{% for i in [-1, 0, 1, 2, 3, 4, 5, 6] %}
+					<option value="{{ i }}" {{"selected" if order['status'] == i }}>{{ i }}: {{ status_map[i] }}</option>
+					{% endfor %}
+				</select>
+				<select name="expired" required>
+					<option value="0" {{"selected" if not order['expired'] }}>lukin</option>
+					<option value="1" {{"selected" if order['expired'] }}>len</option>
+				</select>
+				<input type="hidden" name="session_id" value="{{ order['session_id'] }}" />
+				<input type="submit" value="o ante!" />
+			</li>
+			</form>
+		{% endif %}
+	{% endfor %}
+	</ul>
+	<hr/>
 {% endfor %}
 
 

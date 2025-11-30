@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.config.from_file("./config.json", load=json.load)
 app.config.from_file("./.config_secret.json", load=json.load)
 
-STATUS_MAP = {-1: "moli", 0: "sin", 1: "pana-mani", 2: "lukin-mani", 3: "open-tawa-US", 4: "lon-ma-US", 5: "open-tawa-tomo", 6: "pini"}
+STATUS_MAP = {-1: "moli", 0: "sin", 1: "pana-mani", 2: "lukin-mani", 3: "tawa-ma-US", 4: "lon-ma-US", 5: "tawa-tomo", 6: "pini"}
 STATUS_DESCRIPTION_MAP = {
 	-1: "esun ni li kama moli.",
 	0: "esun ni li kama lon.",
@@ -38,7 +38,6 @@ def connect_database():
 	cur.execute("""
 CREATE TABLE IF NOT EXISTS orders (
 	session_id TEXT UNIQUE NOT NULL,
-	status INTEGER NOT NULL,
 	warehouse TEXT NOT NULL,
 	address_recipient TEXT NOT NULL,
 	address_phone TEXT,
@@ -51,6 +50,7 @@ CREATE TABLE IF NOT EXISTS orders (
 	address_zip TEXT,
 	address_country TEXT NOT NULL,
 	contact TEXT NOT NULL,
+	expired INTEGER NOT NULL,
 	ip TEXT,
 	ref TEXT,
 	message TEXT
@@ -80,8 +80,13 @@ CREATE TABLE IF NOT EXISTS inventory_list (
 	quantity_us INTEGER NOT NULL
 	);
 """)
-	# TODO: Make old orders stale here!
 	return con
+
+def compute_stale_and_expiry():
+	# TODO: Make unpaid new order stale here
+	# TODO: Also make old orders expire here
+	pass
+	
 
 def get_available_stock():
 	con = connect_database()
@@ -100,7 +105,7 @@ def get_available_stock():
 	# Compute the consumed stock here
 	cur.execute("""
 SELECT orders.warehouse, item, COUNT(*) FROM inventory_checkout, orders
-	WHERE inventory_checkout.order_id = orders.rowid AND orders.status >= 0
+	WHERE inventory_checkout.order_id = orders.rowid AND (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) >= 0
 	GROUP BY orders.warehouse, inventory_checkout.item;
 """)
 	for i in cur.fetchall():
@@ -112,7 +117,7 @@ SELECT orders.warehouse, item, COUNT(*) FROM inventory_checkout, orders
 	return {"total_ante": total["ANTE"], "total_us": total["US"],
 			"available_ante": available["ANTE"], "available_us": available["US"]}
 
-def get_order_rowid_by_session_id(cur, session_id):
+def get_order_order_id_by_session_id(cur, session_id):
 	cur.execute(f"SELECT rowid FROM orders WHERE session_id = ?", (session_id,))
 	if cur.rowcount == 0:
 		return None
@@ -121,11 +126,11 @@ def get_order_rowid_by_session_id(cur, session_id):
 def get_utc_timestr_from_timestamp(timestamp):
 	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d %H:%M:%S UTC')
 
-def get_status_by_order_rowid(cur, rowid):
-	if rowid is None:
+def get_status_by_order_id(cur, order_id):
+	if order_id is None:
 		return None
 	status = []
-	cur.execute(f"SELECT datetime, status FROM status_change WHERE order_id = ? ORDER BY datetime", (rowid,))
+	cur.execute(f"SELECT datetime, status FROM status_change WHERE order_id = ? ORDER BY datetime", (order_id,))
 	for status_change in cur.fetchall():
 		entry = {"datetime": status_change[0], "status": status_change[1]}
 		entry["datetime_str"] = get_utc_timestr_from_timestamp(entry["datetime"])
@@ -191,16 +196,16 @@ def form():
 				cur.execute("BEGIN TRANSACTION;")
 				cur.execute("""
 					INSERT INTO orders(
-						session_id, status, warehouse, ip, contact,
+						session_id, expired, warehouse, ip, contact,
 						address_recipient, address_phone, address_email,
 						address_line1, address_line2, address_line3, address_line4,
 						address_city, address_zip, address_country
 					) VALUES (?,?,?,?,?,  ?,?,?,  ?,?,?,?,  ?,?,?)
 					""",
-					(request.form.get("session_id", ""), 0, request.form.get("warehouse", ""), request.remote_addr, request.form.get('contact'),
+					(request.form.get("session_id", ""), False, request.form.get("warehouse", ""), request.remote_addr, request.form.get('contact'),
 					request.form.get("recipient", ""), request.form.get("phone", ""), request.form.get("email", ""), 
 					request.form.get("line1", ""), request.form.get("line2", ""), request.form.get("line3", ""), request.form.get("line4", ""),
-					request.form.get("city", ""), request.form.get("zip", ""), request.form.get("country", ""), )
+					request.form.get("city", ""), request.form.get("zip", ""), request.form.get("country", ""),)
 				)
 				if cur.rowcount == 0:
 					abort(500)
@@ -258,19 +263,23 @@ def view(session_id):
 	con = connect_database()
 	cur = con.cursor()
 
+	compute_stale_and_expiry()
 	entry = {}
-
-	fields = ["rowid", "status", "warehouse", "contact", "message",
+	fields = ["rowid", "warehouse", "contact", "message",
 				"address_recipient", "address_phone", "address_email",
 				"address_line1", "address_line2", "address_line3", "address_line4",
-				"address_city", "address_zip", "address_country"]
+				"address_city", "address_zip", "address_country", "expired"]
 	cur.execute(f"SELECT {','.join(fields)} FROM orders WHERE session_id = ?", (session_id,))
 	if cur.rowcount == 0:
 		abort(404)
 	for i, v in enumerate(cur.fetchone()):
 		entry[fields[i]] = v
 
-	status = get_status_by_order_rowid(cur, entry["rowid"])
+	# Do not show expired entries
+	if entry["expired"] and not check_auth():
+		abort(404)
+
+	status = get_status_by_order_id(cur, entry["rowid"])
 
 	items = []
 	cur.execute(f"SELECT item, quantity, price_each FROM inventory_checkout WHERE order_id = ?", (entry["rowid"],))
@@ -295,13 +304,17 @@ def admin():
 	if not check_auth():
 		abort(404)
 
+	compute_stale_and_expiry()
 	orders = []
 	con = connect_database()
 	cur = con.cursor()
-	cur.execute("SELECT session_id FROM orders")
+	cur.execute("SELECT session_id, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as order_id FROM orders")
 	for i in cur.fetchall():
-		orders.append({"session_id": i[0]})
-	return render_template('admin.html', listing=app.config["LISTING"], stock=get_available_stock(), orders=orders)
+		orders.append({"session_id": i[0], "expired": i[1], "ip": i[2], "ref": i[3], "message": i[4], "status": i[5]})
+	
+	return render_template('admin.html', listing=app.config["LISTING"], stock=get_available_stock(), orders=orders,
+		status_map=STATUS_MAP,
+		status_title={i:f"{STATUS_MAP[i]}: {STATUS_DESCRIPTION_MAP[i]}" for i in STATUS_MAP})
 
 
 @app.route('/ante-nanpa-ijo', methods=['POST'])
@@ -328,8 +341,8 @@ def update_status():
 	session_id = request.form.get("session_id", "")
 	new_status = request.form.get("status", "")
 
-	rowid = get_order_rowid_by_session_id(cur, session_id)
-	status = get_status_by_order_rowid(cur, rowid)
+	order_id = get_order_order_id_by_session_id(cur, session_id)
+	status = get_status_by_order_id(cur, order_id)
 
 	error = False
 
@@ -352,7 +365,34 @@ def update_status():
 def update_order():
 	if not check_auth():
 		abort(404)
-	session_id = request.form.get("session_id", "")
+
+	con = connect_database()
+	cur = con.cursor()
+	if not (request.form.get("session_id") and ("ref" in request.form) and ("expired" in request.form) and ("message" in request.form) and ("status" in request.form)):
+		abort(500)
+
+	cur.execute("BEGIN TRANSACTION;")
+	cur.execute("UPDATE orders SET ref=?,expired=?,message=? WHERE session_id = ?",
+		(request.form["ref"] if request.form["ref"] else None,
+		request.form["expired"],
+		request.form["message"] if request.form["message"] else None,
+		request.form["session_id"],)
+	)
+	order_id = get_order_order_id_by_session_id(cur, request.form["session_id"])
+	status = get_status_by_order_id(cur, order_id)
+	previous_status = status[-1]["status"]
+	new_status = int(request.form["status"])
+	if previous_status != new_status:
+		timenow = round(time.time())
+		# Force insert a lukin-mani state if it's been skipped, with datetime of now minus a second
+		if new_status > 2 and 2 not in [s["status"] for s in status]:
+			cur.execute("INSERT INTO status_change(order_id, datetime, status) VALUES (?,?,?)",
+						(order_id, timenow-1, 2,))
+		cur.execute("INSERT INTO status_change(order_id, datetime, status) VALUES (?,?,?)",
+					(order_id, timenow, new_status,))
+	cur.execute("COMMIT TRANSACTION;")
+
+	return redirect(f"/lawa", code=302)
 	
 
 @app.route('/favicon.ico')
