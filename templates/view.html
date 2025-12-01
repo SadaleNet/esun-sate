@@ -75,7 +75,7 @@
 				<input type="submit" value="o esun sin!" />
 			</form>
 		</li></ul>
-	tenpo {{ expiry }} la lipu ni li wile kama weka. <br/>
+	tenpo {{ expiry["datetime_str"] }} la lipu ni li wile kama weka. <br/>
 	<b><i>"ike a! mi pini pana e mani! taso esun ni li kama moli! mi o pali e seme?"</i></b> <br/>
 	- ali li pona. o toki tawa jan Sate.
 
@@ -83,7 +83,7 @@
 	<h2>tenpo ni la sina ken pali e seme?</h2>
 	<h3>ken wan: sona pi esun ni li pona! mi wile pana e mani:</h3>
 	<ol>
-	<li>o pana e mani kepeken tenpo lili "1hr". sina pana ala e mani la esun ni li kama moli.</li>
+	<li>o pana e mani kepeken tenpo lili "1hr" ({{ expiry["datetime_str"] }}). sina pana ala e mani la esun ni li kama moli.</li>
 	<li>o pana e nimi "Add a note" <span class="content-field">{{session_id[:8]}}</span> e mani <span class="content-field">US${{'%0.2f' % total_price}}</span> lon ma Paypal ni: <a href="{{paypal_link}}/{{'%0.0f' % total_price}}USD" target="_blank">o pana e mani kepeken ilo Paypal!</a></li>
 	<li>sina pini pana e mani la o pilin e nena ni:
 		<ul><li>
@@ -120,7 +120,7 @@
 
 {% elif status[-1]["status"] == 6 %}
 	<h3>esun ni li pini!</h3>
-	tenpo {{ expiry }} la lipu ni li wile kama weka. <br/>
+	tenpo {{ expiry["datetime_str"] }} la lipu ni li wile kama weka. <br/>
 
 {% else %}
 	<h3>PAKALA A! O TOKI TAWA JAN SATE!</h3>

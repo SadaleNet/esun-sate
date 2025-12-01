@@ -82,14 +82,50 @@ CREATE TABLE IF NOT EXISTS inventory_list (
 """)
 	return con
 
-def compute_stale_and_expiry():
-	# TODO: Make unpaid new order stale here
-	# TODO: Also make old orders expire here
-	pass
+def get_utc_timestr_from_timestamp(timestamp):
+	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d %H:%M:%S UTC')
 
-def get_expiry_str(order_id):
-	# TODO: unimlpemented!
-	return "TODO"
+def get_stale_expiry(cur, order_id):
+	cur.execute("SELECT datetime, status FROM status_change WHERE order_id = ? ORDER BY datetime DESC LIMIT 1", (order_id,))
+	ret = {"type": None, "datetime": None, "datetime_str": None}
+	result = cur.fetchone()
+	if result is not None:
+		dt = result[0]
+		status = result[1]
+		if status == 0:
+			# the unpaid order becomes dead
+			ret["type"] = "stale"
+			ret["datetime"] = dt + app.config["PAYMENT_TIMEOUT"]
+		elif status == -1:
+			ret["type"] = "expiry"
+			ret["datetime"] = dt + app.config["DEAD_ORDER_EXPIRY"]
+		elif status == 6:
+			ret["type"] = "expiry"
+			ret["datetime"] = dt + app.config["COMPLETED_ORDER_EXPIRY"]
+
+	if ret["datetime"] is not None:
+		ret["datetime_str"] = get_utc_timestr_from_timestamp(ret["datetime"])
+	return ret
+
+def compute_stale_and_expiry(cur):
+	cur.execute("SELECT rowid FROM orders WHERE expired = FALSE;")
+	timenow = time.time()
+	for i in cur.fetchall():
+		order_id = i[0]
+		need_process = True
+		while need_process:
+			need_process = False
+			event = get_stale_expiry(cur, order_id)
+			print(f'{order_id} {event}')
+			if event["type"] is not None and timenow >= event["datetime"]:
+				if event["type"] == "stale":
+					cur.execute("INSERT INTO status_change(order_id, datetime, status) VALUES (?,?,?)",
+						(order_id, event["datetime"], -1,)
+					)
+					# Reprocess, just in case stale + expiry would happen at the same time
+					need_process = True
+				elif event["type"] == "expiry":
+					cur.execute("UPDATE orders SET expired=? WHERE rowid = ?", (True, order_id,))
 
 def get_available_stock():
 	con = connect_database()
@@ -125,9 +161,6 @@ def get_order_order_id_by_session_id(cur, session_id):
 	if cur.rowcount == 0:
 		return None
 	return cur.fetchone()[0]
-
-def get_utc_timestr_from_timestamp(timestamp):
-	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d %H:%M:%S UTC')
 
 def get_status_by_order_id(cur, order_id):
 	if order_id is None:
@@ -266,7 +299,7 @@ def view(session_id):
 	con = connect_database()
 	cur = con.cursor()
 
-	compute_stale_and_expiry()
+	compute_stale_and_expiry(cur)
 	entry = {}
 	fields = ["rowid", "warehouse", "contact", "message",
 				"address_recipient", "address_phone", "address_email",
@@ -300,18 +333,19 @@ def view(session_id):
 		items.append(shipping_item)
 
 	total_price = sum([i["quantity"]*i["price_each"] for i in items])
-	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry=get_expiry_str(entry["rowid"]))
+	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry=get_stale_expiry(cur, entry["rowid"]))
 
 @app.route('/lawa')
 def admin():
 	if not check_auth():
 		abort(404)
 
-	compute_stale_and_expiry()
-	orders = []
 	con = connect_database()
 	cur = con.cursor()
+	compute_stale_and_expiry(cur)
 	cur.execute("SELECT session_id, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as current_status FROM orders")
+
+	orders = []
 	for i in cur.fetchall():
 		orders.append({"session_id": i[0], "expired": i[1], "ip": i[2], "ref": i[3], "message": i[4], "status": i[5]})
 	

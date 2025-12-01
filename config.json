@@ -10,5 +10,8 @@
 			"price": 1,
 			"shipping": {"ANTE": 0, "US": 0}
 		}
-	}
+	},
+	"PAYMENT_TIMEOUT": 3600,
+	"DEAD_ORDER_EXPIRY": 2592000,
+	"COMPLETED_ORDER_EXPIRY": 2592000
 }
