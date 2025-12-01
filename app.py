@@ -6,7 +6,7 @@ import sqlite3
 import os
 import time
 import uuid
-from flask import Flask, url_for, render_template, send_from_directory, send_file, abort, request, redirect, g
+from flask import Flask, url_for, render_template, send_from_directory, send_file, abort, request, redirect, g, Response
 
 app = Flask(__name__)
 app.config.from_file("./config.json", load=json.load)
@@ -86,7 +86,10 @@ def compute_stale_and_expiry():
 	# TODO: Make unpaid new order stale here
 	# TODO: Also make old orders expire here
 	pass
-	
+
+def get_expiry_str(order_id):
+	# TODO: unimlpemented!
+	return "TODO"
 
 def get_available_stock():
 	con = connect_database()
@@ -297,7 +300,7 @@ def view(session_id):
 		items.append(shipping_item)
 
 	total_price = sum([i["quantity"]*i["price_each"] for i in items])
-	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry="TODO")
+	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry=get_expiry_str(entry["rowid"]))
 
 @app.route('/lawa')
 def admin():
@@ -308,7 +311,7 @@ def admin():
 	orders = []
 	con = connect_database()
 	cur = con.cursor()
-	cur.execute("SELECT session_id, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as order_id FROM orders")
+	cur.execute("SELECT session_id, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as current_status FROM orders")
 	for i in cur.fetchall():
 		orders.append({"session_id": i[0], "expired": i[1], "ip": i[2], "ref": i[3], "message": i[4], "status": i[5]})
 	
@@ -356,7 +359,7 @@ def update_status():
 
 	if not error:
 		timenow = round(time.time())
-		cur.execute("INSERT INTO status_change (order_id, datetime, status) VALUES (?,?,?)", (rowid, timenow, int(new_status)))
+		cur.execute("INSERT INTO status_change (order_id, datetime, status) VALUES (?,?,?)", (order_id, timenow, int(new_status)))
 
 	# Regardless if there's an error, redirect the user back to the view order page
 	return redirect(f"/lukin/{session_id}", code=302)
@@ -393,7 +396,20 @@ def update_order():
 	cur.execute("COMMIT TRANSACTION;")
 
 	return redirect(f"/lawa", code=302)
+
+@app.route("/lukin-pana-mani")
+def notification_api():
+	if not check_auth():
+		abort(404)
+
+	con = connect_database()
+	cur = con.cursor()
+	cur.execute("SELECT (SELECT rowid FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as entry_status_rowid FROM orders WHERE (SELECT status FROM status_change WHERE rowid = entry_status_rowid) = 1")
 	
+	status = cur.fetchall()
+	result = {"mute": len(status), "toki": f"esun Sate: jan {len(status)} li pana e mani. o lukin a!"}
+	return Response(json.dumps(result), mimetype='application/json')
+
 
 @app.route('/favicon.ico')
 def favicon():
