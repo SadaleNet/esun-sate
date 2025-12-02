@@ -116,7 +116,6 @@ def compute_stale_and_expiry(cur):
 		while need_process:
 			need_process = False
 			event = get_stale_expiry(cur, order_id)
-			print(f'{order_id} {event}')
 			if event["type"] is not None and timenow >= event["datetime"]:
 				if event["type"] == "stale":
 					cur.execute("INSERT INTO status_change(order_id, datetime, status) VALUES (?,?,?)",
@@ -183,8 +182,7 @@ def compute_challenge_hash(session_id, image_id):
 	return m.hexdigest()
 
 def check_auth():
-	# TODO: check cookie
-	return True
+	return request.headers.get("Host").rsplit(":", 1)[0] == app.config["ADMIN_HOST"] and request.cookies.get("Tracking") == app.config["ADMIN_COOKIES"]
 
 @app.route('/', methods=['GET', 'POST'])
 def form():
