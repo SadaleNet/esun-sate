@@ -23,8 +23,7 @@
 <tr><th align="right">linja ma tu tu:</th><td>{{ entry["address_line4"] }}</td></tr>
 <tr><th align="right">ma tomo:</th><td>{{ entry["address_city"] }}</td></tr>
 <tr><th align="right">nanpa ZIP:</th><td>{{ entry["address_zip"] }}</td></tr>
-<tr><th align="right">ma:</th><td>{{ entry["address_country"] }}</td></tr>
-<tr><th align="right">ma Mewika anu ma ante?</th><td>{{ entry["warehouse"] }}</td></tr>
+<tr><th align="right">ma:</th><td>{{ entry["address_country"] }}{{ '🇺🇸' if entry['warehouse'] == 'US' else '🌍' }}</td></tr>
 <tr><th valign="top" align="right">nasin toki tawa sina:</th><td><textarea rows="8" cols="32" readonly>{{ entry["contact"] }}</textarea></td></tr>
 <tr><th valign="top" align="right">sina esun e ni:</th><td>
 	<table>

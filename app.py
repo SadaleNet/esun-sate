@@ -343,11 +343,11 @@ def admin():
 	con = connect_database()
 	cur = con.cursor()
 	compute_stale_and_expiry(cur)
-	cur.execute("SELECT session_id, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as current_status FROM orders")
+	cur.execute("SELECT session_id, warehouse, expired, ip, ref, message, (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) as current_status FROM orders")
 
 	orders = []
 	for i in cur.fetchall():
-		orders.append({"session_id": i[0], "expired": i[1], "ip": i[2], "ref": i[3], "message": i[4], "status": i[5]})
+		orders.append({"session_id": i[0], "warehouse": i[1], "expired": i[2], "ip": i[3], "ref": i[4], "message": i[5], "status": i[6]})
 	
 	return render_template('admin.html', listing=app.config["LISTING"], stock=get_available_stock(), orders=orders,
 		status_map=STATUS_MAP,
