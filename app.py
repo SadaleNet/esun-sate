@@ -29,7 +29,7 @@ CAPTCHA = ['kala', 'kasi', 'kili', 'kiwen', 'len', 'lipu', 'luka', 'mani', 'mun'
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = sqlite3.connect(app.config["DATABASE"], autocommit=True)
+        db = g._database = sqlite3.connect(app.config["DATABASE"])
     return db
 
 def connect_database():
@@ -125,6 +125,7 @@ def compute_stale_and_expiry(cur):
 					need_process = True
 				elif event["type"] == "expiry":
 					cur.execute("UPDATE orders SET expired=? WHERE rowid = ?", (True, order_id,))
+	cur.connection.commit()
 
 def get_available_stock():
 	con = connect_database()
@@ -368,6 +369,7 @@ def update_inventory():
 		cur.execute("UPDATE inventory_list SET quantity_us = ?, quantity_ante = ? WHERE item = ?", update_content)
 		if cur.rowcount == 0:
 			cur.execute("INSERT INTO inventory_list (quantity_us, quantity_ante, item) VALUES (?,?,?)", update_content)
+	con.commit()
 	return redirect("/lawa", code=302)
 
 @app.route('/ante-e-esun', methods=['POST'])
@@ -397,6 +399,7 @@ def update_status():
 	if not error:
 		timenow = round(time.time())
 		cur.execute("INSERT INTO status_change (order_id, datetime, status) VALUES (?,?,?)", (order_id, timenow, int(new_status)))
+		con.commit()
 
 	# Regardless if there's an error, redirect the user back to the view order page
 	return redirect(f"/lukin/{session_id}", code=302)
@@ -458,7 +461,7 @@ def favicon():
 
 @app.route('/robots.txt')
 def robots():
-	return send_from_directory(app.root_path, "robots.txt", mimetype="text/plain")
+	return send_from_directory(os.path.join(app.root_path, "static"), "robots.txt", mimetype="text/plain")
 
 @app.teardown_appcontext
 def close_connection(exception):
