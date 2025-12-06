@@ -143,7 +143,7 @@ def get_available_stock():
 
 	# Compute the consumed stock here
 	cur.execute("""
-SELECT orders.warehouse, item, COUNT(*) FROM inventory_checkout, orders
+SELECT orders.warehouse, item, SUM(inventory_checkout.quantity) FROM inventory_checkout, orders
 	WHERE inventory_checkout.order_id = orders.rowid AND (SELECT status FROM status_change WHERE order_id = orders.rowid ORDER BY datetime DESC LIMIT 1) >= 0
 	GROUP BY orders.warehouse, inventory_checkout.item;
 """)
