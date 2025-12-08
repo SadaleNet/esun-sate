@@ -37,6 +37,7 @@ def connect_database():
 	cur = con.cursor()
 	cur.execute("""
 CREATE TABLE IF NOT EXISTS orders (
+	-- rowid INTEGER PRIMARY KEY AUTOINCREMENT, -- Comes with sqlite by default for free!
 	session_id TEXT UNIQUE NOT NULL,
 	warehouse TEXT NOT NULL,
 	address_recipient TEXT NOT NULL,
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS status_change (
 	order_id INTEGER NOT NULL,
 	datetime INTEGER NOT NULL,
 	status INTEGER NOT NULL,
-	FOREIGN KEY(order_id) REFERENCES orders(id)
+	FOREIGN KEY(order_id) REFERENCES orders(rowid)
 	);
 """)
 	cur.execute("""
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS inventory_checkout (
 	item TEXT NOT NULL,
 	quantity INTEGER NOT NULL,
 	price_each REAL NOT NULL,
-	FOREIGN KEY(order_id) REFERENCES orders(id)
+	FOREIGN KEY(order_id) REFERENCES orders(rowid)
 	);
 """)
 	cur.execute("""
