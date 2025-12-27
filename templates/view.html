@@ -47,7 +47,7 @@
 </table>
 
 {% if status|length == 0 %}
-	<h3>PAKALA A! O TOKI TAWA JAN SATE!</h3>
+	<h3>LIPU NI LI PAKALA. NI LI IKE SINA ALA. O TOKI TAWA JAN SATE! ONA LI WILE PONA E ONA. [ike #1]</h3>
 
 {% elif status[-1]["status"] == -1 %}
 	<h3>esun ni li moli!</h3>
@@ -129,11 +129,11 @@
 	tenpo {{ expiry["datetime_str"] }} la lipu ni li wile kama weka. <br/>
 
 {% else %}
-	<h3>PAKALA A! O TOKI TAWA JAN SATE!</h3>
+	<h3>LIPU NI LI PAKALA. NI LI IKE SINA ALA. O TOKI TAWA JAN SATE! ONA LI WILE PONA E ONA. [ike #2]</h3>
 
 {% endif %}
 
-<h3>pakala li lon a! mi o seme?</h3>
+<h3>mi lukin e pakala a! mi o seme?</h3>
 ijo li pakala la o toki tawa jan Sate kepeken nasin ni: <br/>
 {% include "contact.html" %}
 
