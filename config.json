@@ -2,8 +2,8 @@
 	"LISTING": {
 		"ilonena": {
 			"title": "ilo nena",
-			"price": 25,
-			"shipping": {"ANTE": 7, "US": 15}
+			"price": 23,
+			"shipping": {"ANTE": 9, "US": 15}
 		},
 		"maninamako": {
 			"title": "mani namako",
