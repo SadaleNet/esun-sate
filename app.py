@@ -5,6 +5,7 @@ import random
 import sqlite3
 import os
 import time
+import re
 import uuid
 from flask import Flask, url_for, render_template, send_from_directory, send_file, abort, request, redirect, g, Response
 
@@ -184,6 +185,10 @@ def compute_challenge_hash(session_id, image_id):
 def check_auth():
 	return request.headers.get("Host").rsplit(":", 1)[0] == app.config["ADMIN_HOST"] and request.cookies.get("Tracking") == app.config["ADMIN_COOKIES"]
 
+# Allow access for warehouse manager who's been given the link for filling in the tracking ID
+def compute_warehouse_token(session_id):
+	return compute_challenge_hash(session_id, "US_WAREHOUSE")
+
 @app.route('/', methods=['GET', 'POST'])
 def form():
 	post_action = (request.method == 'POST' and not request.form.get('skip-validation'))
@@ -337,7 +342,11 @@ def view(session_id):
 		items.append(shipping_item)
 
 	total_price = sum([i["quantity"]*i["price_each"] for i in items])
-	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry=get_stale_expiry(cur, entry["rowid"]))
+
+	latest_status = status[-1]["status"]
+	show_warehouse_ui = (latest_status > 0 and latest_status < 6 and compute_warehouse_token(session_id) == request.args.get("warehouse_token"))
+
+	return render_template('view.html', session_id=session_id, entry=entry, status=status, items=items, total_price=total_price, paypal_link=app.config["PAYPAL_LINK"], expiry=get_stale_expiry(cur, entry["rowid"]), show_warehouse_ui=show_warehouse_ui)
 
 @app.route('/lawa')
 def admin():
@@ -355,7 +364,7 @@ def admin():
 	orders = []
 	for i in cur.fetchall():
 		orders.append({"session_id": i[0], "warehouse": i[1], "expired": i[2], "ip": i[3], "ref": i[4], "message": i[5], "status": i[6],
-			"datetime": i[7], "datetime_str": get_utc_timestr_from_timestamp(i[7])})
+			"datetime": i[7], "datetime_str": get_utc_timestr_from_timestamp(i[7]), "warehouse_token": compute_warehouse_token(i[0])})
 	
 	return render_template('admin.html', listing=app.config["LISTING"],  visitor_url=app.config["VISITOR_URL"], stock=get_available_stock(), orders=orders,
 		status_map=STATUS_MAP,
@@ -441,7 +450,56 @@ def update_order():
 					(order_id, timenow, new_status,))
 	cur.execute("COMMIT TRANSACTION")
 
-	return redirect(f"/lawa", code=302)
+	return redirect("/lawa", code=302)
+
+@app.route('/pana-e-nanpa-tawa-esun', methods=['POST'])
+def add_tracking_number():
+	if not (request.form.get("session_id") and ("warehouse_token" in request.form) and ("tracking_number" in request.form)):
+		abort(404) # Pretends to be 404. Security through obscurity
+
+	session_id = request.form["session_id"]
+	tracking_number = request.form.get("tracking_number").replace('[', '').replace(']', '')
+	warehouse_token = compute_warehouse_token(request.form.get("session_id"))
+	if compute_warehouse_token(request.form.get("session_id")) != request.form.get("warehouse_token"):
+		abort(404)
+
+	con = connect_database()
+	cur = con.cursor()
+
+	cur.execute("BEGIN TRANSACTION")
+	order_id = get_order_order_id_by_session_id(cur, session_id)
+	status = get_status_by_order_id(cur, order_id)
+	previous_status = status[-1]["status"]
+
+	# Do not allow setting dead or completed orders
+	if previous_status < 0 or previous_status >= 6:
+		abort(400)
+
+	# Insert USPS tracking number
+	cur.execute("SELECT message FROM orders WHERE session_id = ?", (session_id,))
+	result = cur.fetchone()
+	original_message = result[0] if result[0] is not None else ""
+	REGEX = '\\[USPS .*?\\]'
+
+	if re.search(REGEX, original_message) is None:
+		original_message += " | [USPS TBC]"
+	print(original_message)
+	print(tracking_number)
+	new_message = re.sub(REGEX, f"[USPS {tracking_number}]", original_message)
+
+	cur.execute("UPDATE orders SET message=? WHERE session_id = ?",
+		(new_message, session_id,)
+	)
+
+	# Set the status to shipped, if it hasn't been set as so
+	new_status = 5
+	if previous_status != new_status:
+		timenow = round(time.time())
+		cur.execute("INSERT INTO status_change(order_id, datetime, status) VALUES (?,?,?)",
+					(order_id, timenow, new_status,))
+	cur.execute("COMMIT TRANSACTION")
+
+	return redirect(f"/lukin/{session_id}?warehouse_token={warehouse_token}", code=302)
 
 @app.route("/lukin-pana-mani")
 def notification_api():

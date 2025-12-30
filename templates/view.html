@@ -46,6 +46,17 @@
 </td></tr>
 </table>
 
+
+{% if show_warehouse_ui %}
+<form action="/pana-e-nanpa-tawa-esun" method="POST">
+	USPS tracking number:
+	<input type="text" name="tracking_number" size="30" maxlength="48" placeholder="USPS tracking number" required autocomplete="off">
+	<input type="hidden" name="session_id" value="{{ session_id }}" />
+	<input type="hidden" name="warehouse_token" value="{{ request.args.get('warehouse_token') }}" />
+	<input type="submit" value="Set" />
+</form>
+{% endif %}
+
 {% if status|length == 0 %}
 	<h3>LIPU NI LI PAKALA. NI LI IKE SINA ALA. O TOKI TAWA JAN SATE! ONA LI WILE PONA E ONA. [ike #1]</h3>
 
