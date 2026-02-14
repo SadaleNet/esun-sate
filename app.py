@@ -228,11 +228,10 @@ def form():
 			if request.form.get(k, "").isnumeric() and int(request.form.get(k)) > available_quantity:
 				error_message["items"] = "sina wile e ijo pi lon ala!"
 
-		if request.form.get("mama") != "Sonja" or request.form.get("challenge") != compute_challenge_hash(request.form.get("session_id", ""), request.form.get("sitelen", "")):
+		if request.form.get("mama") not in ["Sonja", "sonja"] or request.form.get("challenge") != compute_challenge_hash(request.form.get("session_id", ""), request.form.get("sitelen", "")):
 			error_message["captcha"] = "sina toki e ijo ike! o toki pona!"
 
 		if not error_message:
-
 			cur.execute("SELECT COUNT(*) FROM orders WHERE session_id = ?", (request.form.get("session_id", ""),))
 			if cur.fetchone()[0] == 0:
 				# Only perform insertation if session_id hasn't been recorded yet
