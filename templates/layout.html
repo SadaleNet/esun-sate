@@ -12,19 +12,39 @@
 				max-width: 90%;
 				font-family: sans-serif;
 			}
+			.error-message {
+				color: #ff0000;
+				font-weight: bold;
+			}
+			.error-message-top {
+				color: #ff0000;
+				font-weight: bold;
+			}
 
 			pre {
 				white-space: pre-wrap;
+			}
+
+			.raffle-image {
+				min-width: 5px;
+				min-height: 5px;
+				max-width: 80%;
 			}
 
 			@media screen and (min-width: 50rem) {
 				body {
 					max-width: 70%;
 				}
+				.raffle-image {
+					max-width: 65%;
+				}
 			}
 			@media screen and (min-width: 100rem) {
 				body {
 					max-width: 60%;
+				}
+				.raffle-image {
+					max-width: 50%;
 				}
 			}
 			@media screen and (min-width: 25rem) {
@@ -56,7 +76,10 @@
 	</head>
 	<body>
 		<div class="wrapper">
-			<div class="div-limit-height"><span class="wrapper-wvcenter"><a href="/" class="site-title-link"><span><img src="/favicon.ico" height="20"/></span> <span>esun Sate</span></a></span></div>
+			<div class="div-limit-height">
+				<span class="wrapper-wvcenter"><a href="/" class="site-title-link"><span><img src="/favicon.ico" height="20"/></span> <span>esun Sate</span></a></span>
+				| <span class="wrapper-wvcenter"><a href="/maniala" class="site-title-link"><span>🎁 alasa pi mani ala</span></a></span>
+			</div>
 		</div>
 		<p>{% block content %}{% endblock %}</p>
 		<p class="copyright-text">esun Sate li pali pi <a href="https://sadale.net/tok" target="_blank">jan Sate</a>.</p>

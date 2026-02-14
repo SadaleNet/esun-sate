@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}nanpa alasa {{ session_id }}{% endblock %}
+{% block content %}
+
+<h2>nanpa alasa {{ session_id }}</h2>
+
+<h3>sina wile alasa e ijo pi mani ala. ni li sona sina:</h3>
+
+<ul>
+	<li><b>tenpo musi: </b> {{ start_datetime_str }} ~ {{ end_datetime_str }}</li>
+	<li><b>nimi sina: </b> {{ name }}</li>
+	<li><b>nanpa sina: </b> {{ name }}#{{ session_id[:8] }}</li>
+	<li><b>nasin toki tawa sina: </b><br/><textarea rows="8" cols="32" readonly>{{ contact }}</textarea></li>
+	{% if prioritize != "" %}
+	<li><b>ijo sona sina. sona ni li ken suli e wawa alasa sina: </b><br/><textarea rows="8" cols="32" readonly>{{ prioritize }}</textarea></li>
+	{% endif %}
+</ul>
+
+sina alasa kama jo e ijo kepeken mani ala. sina jan jo la jan Sate li wile toki tawa sina.
+
+<h3>mi toki e ijo pakala a! mi o seme?</h3>
+ijo li pakala la o toki tawa jan Sate kepeken nasin ni: <br/>
+{% include "contact.html" %}
+
+{% endblock %}

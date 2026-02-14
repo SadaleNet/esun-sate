@@ -1,0 +1,146 @@
+{% extends "layout.html" %}
+{% block title %}alasa pi mani ala{% endblock %}
+{% block content %}
+
+<span class="error-message-top">{{ "ijo li pakala a! o lukin lon anpa!" if error_message else "" }}</span>
+
+<h3>o alasa e ijo kepeken mani ala!</h3>
+
+<img class="raffle-image" src="{{ url_for('static', filename='musipimaniala.png') }}"/>
+
+<h3>ni li seme?</h3>
+
+mi pali esun Sate tan musi tan mani ala. mi pali e ilo sin la mani mi li kama weka. jan li esun e ijo lon esun Sate la mani mi li kama mute. ni la mi ken jo e mani namako. <br/>
+mi wile ala e mani namako ni. tan ni la mi pali e musi ni: jan ali li ken alasa e ilo mi kepeken mani ala. taso ken ni li lili. <br/>
+
+<h3>jan li ken alasa e seme?</h3>
+
+tenpo ni la jan li ken alasa e ilo nena taso.
+
+<h3>jan seme li ken musi?</h3>
+
+jan ali li ken musi. sina jan ni la ken alasa sina li kama suli: <br/>
+
+<ul>
+	<li>sina jo ala e mani. sina jo ala e pali. sina jo ala e nasin pi pana mani.</li>
+	<li>sina lon ma pi mani lili.</li>
+	<li>sina pali e ijo tawa toki pona (musi, sitelen tawa, lipu, ...)</li>
+	<li>ijo ante: o toki tawa mi! mi wile sona a! :)</li>
+</ul>
+
+lon musi wan la sina ken musi lon tenpo wan taso. sina musi lon musi pi tenpo ni la sina ken ala musi sin. taso sina ken musi sin lon musi pi tenpo kama.
+
+<h3 id="ma-sitelen">musi pi tenpo ni</h3>
+
+<span class="error-message-top">{{ "ijo li pakala a! o lukin lon anpa!" if error_message else "" }}</span>
+
+{% if current_raffle is none %}
+
+tenpo ni la musi li lon ala. o awen! o lukin e lipu Telekan e lipu Wesi! ni la musi sin li lon la sina sona.
+
+{% else %}
+
+<script>
+	function $(x) {
+		return document.querySelector(x);
+	}
+	function prioritize_update_handler() {
+		if($("#prioritize_yes").checked) {
+			$("textarea[name='prioritize']").disabled = false;
+		} else {
+			$("textarea[name='prioritize']").disabled = true;
+		}
+	}
+</script>
+
+<form action="/maniala" method="POST">
+
+<ul>
+	<li>tenpo open: {{ current_raffle["start_datetime_str"] }}</li>
+	<li>tenpo pini: {{ current_raffle["end_datetime_str"] }}</li>
+	<li>jan {{ current_raffle["winner_count"] }} li ken alasa e ijo pi mani ala</li>
+</ul>
+
+<p>
+<b>nimi sina li seme? (jan ali li ken lukin e nimi sina ni a!)</b> <br/>
+
+<span class="error-message">{{ error_message.get("name", "") }}{{ "<br/>"|safe if error_message.get("name") }}</span>
+
+<input type="text" name="name" size="35" maxlength="48" placeholder="jan Apolo" required autocomplete="off" value="{{ request.form.get('name', '') }}">
+</p>
+
+<p>
+<b>mi ken toki tawa sina kepeken nasin seme?</b> <br/>
+
+<span class="error-message">{{ error_message.get("contact", "") }}{{ "<br/>"|safe if error_message.get("contact") }}</span>
+	<textarea name="contact" autocomplete="off" placeholder="ilo Email: foobar@example.com
+ilo Telekan: @foobar
+(ilo ni li ken: ilo Siko, Telekan,
+Whatsapp, waso laso, Pepu,
+Lipela IRC, Email)" rows="8" cols="32" required>{{ request.form.get("contact", "") }}</textarea>
+</p>
+
+<p>
+<b>sina wile e ijo pi mani ala tan seme?</b> <br/>
+
+<span class="error-message">{{ error_message.get("prioritize_radio", "") }}{{ "<br/>"|safe if error_message.get("prioritize_radio") }}</span>
+
+<input type="radio" id="prioritize_no" name="prioritize_radio" value="no" required {{ "checked" if request.form.get("prioritize_radio", "") == "no" else "" }} onchange="prioritize_update_handler()">
+<label for="prioritize_no">mi wile ala pana e mani taso</label><br/>
+<input type="radio" id="prioritize_yes" name="prioritize_radio" value="yes" required {{ "checked" if request.form.get("prioritize_radio", "") == "yes" else "" }} onchange="prioritize_update_handler()">
+<label for="prioritize_yes">mi ken ala pana e mani / mi pali e ijo suli tawa toki pona:</label><br/>
+
+<span class="error-message">{{ error_message.get("prioritize", "") }}{{ "<br/>"|safe if error_message.get("prioritize") }}</span>
+	<textarea name="prioritize" autocomplete="off" placeholder="mi jan lili li jo ala e mani.
+
+mi pali e kalama musi pi toki
+pona. o lukin lon ma ni:
+https://example.com/
+" rows="8" cols="32" required>{{ request.form.get("prioritize", "") }}</textarea>
+</p>
+
+<p>
+<b>mi wile weka e jan pi toki pona ala e ilo ike:</b> <br/>
+
+{% include "captcha.html" %}
+
+<p><input type="submit" value="o pana e sona sina!" /> (sina ken ala ante e sona sina a!)</p>
+
+</form>
+
+<script>prioritize_update_handler()</script>
+
+{% if error_message %}
+<script>$('#ma-sitelen').scrollIntoView()</script>
+{% endif %}
+
+{% endif %}
+
+
+<h3>musi pi tenpo pini</h3>
+
+tenpo pini la musi ni li lon: <br/>
+
+<ul>
+	{% if history_raffle|length == 0 %}
+		<li>(musi pi tenpo pini li lon ala a!)</li>
+	{% else %}
+		{% for raffle in history_raffle %}
+		<li>musi pi tenpo "{{ raffle["start_date_str"] }} ~ {{ raffle["end_date_str"] }}": jan {{ raffle["players"] }} li musi. jan {{ raffle["winners"] }} ni li jo e ijo pi mani ala:
+		{% if raffle["result"] is none %}
+			(o awen a!)
+		{% else %}
+			{{ raffle["result"] }}
+		{% endif %}
+		</li>
+		{% endfor %}
+	{% endif %}
+</ul>
+
+sina jan jo la jan Sate li wile toki tawa sina.
+
+<hr/>
+
+To spammers: You've came to the wrong place. The submitted content of this form would never be shown to the public and won't be crawled by search engines. You're wasting my time and your own time. Please just leave and spam elsewhere more profitable to you.
+
+{% endblock %}

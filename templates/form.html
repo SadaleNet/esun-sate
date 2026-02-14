@@ -78,14 +78,6 @@
 	}
 </script>
 <style>
-	.error-message {
-		color: #ff0000;
-		font-weight: bold;
-	}
-	.error-message-top {
-		color: #ff0000;
-		font-weight: bold;
-	}
 	.description {
 		color: #777777;
 	}
@@ -108,7 +100,7 @@
 
 ni li esun Sate. kepeken lipu ni la sina ken esun e ijo tan <a href="https://sadale.net/tok" target="_blank">jan Sate</a>! :)<br/>
 sina jo e mani la o esun e ijo!<br/>
-sina jo ala e mani la o awen. mi jo e mani namako la ken la sina ken kama jo e ijo kepeken mani ala. o lukin e ilo Wesi e ilo Telekan.<br/>
+sina jo ala e mani la o awen. mi jo e mani namako la ken la sina ken <a href="/maniala">kama jo e ijo kepeken mani ala</a>.<br/>
 nanpa mani pi esun Sate li lon ma ni (kepeken toki Inli): <a href="https://github.com/SadaleNet/accounting-inventory-esunsate" target="_blank">mani pi esun Sate</a><br/>
 
 <h3>sina lon ma seme?</h3>
@@ -200,31 +192,7 @@ Lipela IRC, Email)" rows="8" cols="32" required>{{ request.form.get("contact", "
 <h3>sina jan pona anu ilo ike?</h3>
 <span class="error-message">{{ error_message.get("captcha", "") }}</span>
 
-<h4>1. jan seme li mama pi toki pona?</h4>
-<p>- jan <input type="text" name="mama" size="5" maxlength="5" required placeholder="Nimi" autocomplete="off" /></p>
-<h4>2. sitelen ni li seme?</h4>
-<input type="hidden" name="session_id" value="{{ session_id }}" />
-<input type="hidden" name="challenge" value="{{ challenge }}" />
-<img src="/sitelen/{{ session_id }}/{{ challenge }}" width="240" height="240"/><br/>
-- <select name="sitelen" required>
-	<option value="" selected disabled hidden>(o anu!)</option>
-	<option value="kala">kala</option>
-	<option value="kasi">kasi</option>
-	<option value="kili">kili</option>
-	<option value="kiwen">kiwen</option>
-	<option value="len">len</option>
-	<option value="lipu">lipu</option>
-	<option value="luka">luka</option>
-	<option value="mani">mani</option>
-	<option value="mun">mun</option>
-	<option value="noka">noka</option>
-	<option value="pan">pan</option>
-	<option value="pipi">pipi</option>
-	<option value="poki">poki</option>
-	<option value="soweli">soweli</option>
-	<option value="tomo">tomo</option>
-	<option value="waso">waso</option>
-</select>
+{% include "captcha.html" %}
 
 <h3>pini! o pilin e nena ni:</h3>
 

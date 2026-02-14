@@ -82,10 +82,33 @@ CREATE TABLE IF NOT EXISTS inventory_list (
 	quantity INTEGER NOT NULL
 	);
 """)
+	cur.execute("""
+CREATE TABLE IF NOT EXISTS raffle_event (
+	start_datetime INTEGER NOT NULL,
+	end_datetime INTEGER NOT NULL,
+	winners INTEGER NOT NULL
+	);
+""")
+	cur.execute("""
+CREATE TABLE IF NOT EXISTS raffle_entry (
+	raffle_id INTEGER NOT NULL,
+	session_id TEXT UNIQUE NOT NULL,
+	datetime INTEGER NOT NULL,
+	name TEXT NOT NULL,
+	contact TEXT NOT NULL,
+	prioritize TEXT NOT NULL,
+	ip TEXT,
+	winner INTEGER NOT NULL,
+	FOREIGN KEY(raffle_id) REFERENCES raffle(rowid)
+	);
+""")
 	return con
 
 def get_utc_timestr_from_timestamp(timestamp):
 	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d %H:%M:%S UTC')
+
+def get_utc_datestr_from_timestamp(timestamp):
+	return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp).astimezone(datetime.timezone.utc), '%Y-%m-%d')
 
 def get_stale_expiry(cur, order_id):
 	cur.execute("SELECT datetime, status FROM status_change WHERE order_id = ? ORDER BY datetime DESC LIMIT 1", (order_id,))
@@ -174,6 +197,45 @@ def get_status_by_order_id(cur, order_id):
 		entry["description"] = STATUS_DESCRIPTION_MAP[entry["status"]] if entry["status"] in STATUS_DESCRIPTION_MAP else ""
 		status.append(entry)
 	return status
+
+def get_current_raffle_event(cur):
+	timestamp_now = int(time.time())
+	cur.execute("SELECT rowid, start_datetime, end_datetime, winners FROM raffle_event WHERE ? >= start_datetime AND ? <= end_datetime ORDER BY start_datetime LIMIT 1", (timestamp_now,timestamp_now))
+	result = cur.fetchone()
+	if result is None:
+		return None
+
+	return {"rowid": result[0],
+		"start_datetime_str": get_utc_timestr_from_timestamp(result[1]),
+		"end_datetime_str": get_utc_timestr_from_timestamp(result[2]),
+		"winner_count": result[3]}
+
+def get_historic_raffle_event(cur):
+	cur.execute("SELECT rowid, start_datetime, end_datetime, winners FROM raffle_event WHERE ? > end_datetime ORDER BY start_datetime", (int(time.time()),))
+
+	ret = []
+	for result in cur.fetchall():
+		rowid = result[0]
+		start_datetime = result[1]
+		end_datetime = result[2]
+		winners_count = result[3]
+		raffle_result = []
+		cur.execute("SELECT COUNT(*) FROM raffle_entry WHERE raffle_id = ?", (rowid,))
+		result = cur.fetchone()
+		players_count = result[0]
+
+		cur.execute("SELECT session_id, name FROM raffle_entry WHERE raffle_id = ? AND winner = TRUE", (rowid,))
+		for result_entry in cur.fetchall():
+			raffle_result.append(f"{result_entry[1]}#{result_entry[0][:8]}")
+		raffle_result = ", ".join(raffle_result)
+		ret.append({
+			"start_date_str": get_utc_datestr_from_timestamp(start_datetime),
+			"end_date_str": get_utc_datestr_from_timestamp(end_datetime),
+			"players": players_count,
+			"winners": winners_count,
+			"result": (raffle_result if len(raffle_result) > 0 else None)
+		})
+	return ret
 
 def compute_challenge_hash(session_id, image_id):
 	m = hashlib.sha256()
@@ -516,6 +578,79 @@ def notification_api():
 		result = {"mute": 0, "toki": f"jan ala li pana e mani"}
 	return Response(json.dumps(result), mimetype='application/json')
 
+@app.route('/maniala', methods=['GET', 'POST'])
+def raffle():
+	con = connect_database()
+	cur = con.cursor()
+
+	current_raffle = get_current_raffle_event(cur)
+	post_action = (current_raffle is not None and request.method == 'POST')
+
+	error_message = {}
+	if post_action:
+		if not (request.form.get('name')):
+			error_message["name"] = "o pana e nimi sina!"
+
+		if not request.form.get('contact'):
+			error_message["contact"] = "o pana e nasin toki tawa mi!"
+
+		if not request.form.get('prioritize_radio'):
+			error_message["prioritize_radio"] = "o anu!"
+
+		if request.form.get("prioritize_radio") == "yes" and len(request.form.get("prioritize", "")) == 0:
+			error_message["prioritize_radio"] = "o sitelen e ijo sina!"
+
+		if request.form.get("mama") not in ["Sonja", "sonja"] or request.form.get("challenge") != compute_challenge_hash(request.form.get("session_id", ""), request.form.get("sitelen", "")):
+			error_message["captcha"] = "sina toki e ijo ike! o toki pona!"
+
+		if not error_message:
+			rowid = current_raffle.get("rowid", -1) # Here current_raffle won't be None but I'm putting a default value of -1 here just in case
+			timenow = round(time.time())
+
+			cur.execute("INSERT INTO raffle_entry(raffle_id, session_id, datetime, name, contact, prioritize, ip, winner) VALUES (?,?,?,?,?,?,?,?)",
+				(rowid, request.form.get("session_id", ""), timenow,
+				request.form.get("name", ""), request.form.get("contact", ""),
+				request.form.get("prioritize", "") if request.form.get("prioritize_radio") == "yes" else "",
+				request.headers.get('X-Real-IP', request.remote_addr), False,
+				))
+
+			cur.execute("COMMIT TRANSACTION")
+
+			# all good! Redirect to /maniala/<token>!
+			session_id = request.form.get("session_id", "")
+			return redirect(f"/maniala/{session_id}", code=302)
+
+	session_id = str(uuid.uuid4()).replace('-', '')[::-1]
+	challenge = compute_challenge_hash(session_id, random.choice(CAPTCHA))
+	return render_template('raffle.html',
+			session_id=session_id,
+			challenge=challenge,
+			error_message=error_message,
+			current_raffle=current_raffle,
+			history_raffle=get_historic_raffle_event(cur)
+	)
+
+@app.route('/maniala/<session_id>')
+def raffle_entry(session_id):
+	if session_id == "":
+		return redirect(f"/maniala", code=302)
+
+	con = connect_database()
+	cur = con.cursor()
+
+	cur.execute("SELECT raffle_id, name, contact, prioritize FROM raffle_entry WHERE session_id = ?", (session_id,))
+	result = cur.fetchone()
+	cur.execute("SELECT start_datetime, end_datetime FROM raffle_event WHERE rowid = ?", (result[0],))
+	result2 = cur.fetchone()
+
+	return render_template('raffle_entry.html',
+		session_id=session_id,
+		name=result[1],
+		contact=result[2],
+		prioritize=result[3],
+		start_datetime_str=get_utc_datestr_from_timestamp(result2[0]),
+		end_datetime_str=get_utc_datestr_from_timestamp(result2[1])
+	)
 
 @app.route('/favicon.ico')
 def favicon():
