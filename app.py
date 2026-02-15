@@ -643,6 +643,9 @@ def raffle_entry(session_id):
 	cur.execute("SELECT start_datetime, end_datetime FROM raffle_event WHERE rowid = ?", (result[0],))
 	result2 = cur.fetchone()
 
+	if time.time() > result2[1] + app.config["RAFFLE_VIEW_EXPIRY"]:
+		abort(404)
+
 	return render_template('raffle_entry.html',
 		session_id=session_id,
 		name=result[1],
